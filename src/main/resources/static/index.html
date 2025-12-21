@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>Conflict Tracker</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; }
+        h1 { margin: 0 0 12px; }
+
+        .row { display: flex; gap: 12px; align-items: center; margin: 12px 0 18px; flex-wrap: wrap; }
+        select, button, input, textarea { padding: 8px 10px; }
+        input[type="text"], input[type="date"], textarea, select { border: 1px solid #ccc; border-radius: 4px; }
+        textarea { resize: vertical; min-height: 38px; }
+
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; vertical-align: top; }
+        th { background: #f5f5f5; }
+
+        .muted { color: #666; }
+        .error { color: #b00020; }
+        .ok { color: #1b7f2a; }
+
+        .form { border: 1px solid #eee; padding: 12px; border-radius: 6px; margin-bottom: 14px; }
+        .form label { display: flex; flex-direction: column; gap: 6px; }
+        .form .grow { flex: 1; min-width: 220px; }
+        .form .desc { flex: 2; min-width: 260px; }
+
+        .actions { display: flex; gap: 8px; }
+    </style>
+</head>
+<body>
+<h1>Conflict Tracker</h1>
+
+<div class="form">
+    <div class="row" style="margin-bottom: 8px;">
+        <strong id="formTitle">Add conflict</strong>
+        <span id="msg" class="muted"></span>
+    </div>
+
+    <div class="row">
+        <label class="grow">
+            Name
+            <input id="f_name" type="text" placeholder="e.g. Test Conflict"/>
+        </label>
+
+        <label>
+            Start date
+            <input id="f_date" type="date"/>
+        </label>
+
+        <label>
+            Status
+            <select id="f_status">
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="FROZEN">FROZEN</option>
+                <option value="ENDED">ENDED</option>
+            </select>
+        </label>
+
+        <label class="desc">
+            Description
+            <textarea id="f_desc" placeholder="Optional..."></textarea>
+        </label>
+
+        <button id="saveBtn" type="button">Add</button>
+        <button id="cancelBtn" type="button" style="display:none;">Cancel</button>
+    </div>
+</div>
+
+<div class="row">
+    <label>
+        Filter status:
+        <select id="status">
+            <option value="">ALL</option>
+            <option value="ACTIVE">ACTIVE</option>
+            <option value="FROZEN">FROZEN</option>
+            <option value="ENDED">ENDED</option>
+        </select>
+    </label>
+
+    <button id="reload">Reload</button>
+    <span id="info" class="muted"></span>
+</div>
+
+<table>
+    <thead>
+    <tr>
+        <th style="width:80px;">ID</th>
+        <th style="width:220px;">Name</th>
+        <th style="width:140px;">Start date</th>
+        <th style="width:120px;">Status</th>
+        <th>Description</th>
+        <th style="width:180px;">Actions</th>
+    </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+</table>
+
+<script>
+    const tbody = document.getElementById("tbody");
+    const status = document.getElementById("status");
+    const info = document.getElementById("info");
+    const reloadBtn = document.getElementById("reload");
+
+    const msg = document.getElementById("msg");
+    const formTitle = document.getElementById("formTitle");
+    const fName = document.getElementById("f_name");
+    const fDate = document.getElementById("f_date");
+    const fStatus = document.getElementById("f_status");
+    const fDesc = document.getElementById("f_desc");
+    const saveBtn = document.getElementById("saveBtn");
+    const cancelBtn = document.getElementById("cancelBtn");
+
+    let editingId = null;
+
+    function setMsg(text, kind) {
+      msg.className = kind === "error" ? "error" : (kind === "ok" ? "ok" : "muted");
+      msg.textContent = text || "";
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getFormPayload() {
+      const name = (fName.value || "").trim();
+      const startDate = (fDate.value || "").trim();
+      const statusVal = fStatus.value;
+      const description = (fDesc.value || "").trim();
+
+      if (!name) throw new Error("Name is required.");
+      if (!startDate) throw new Error("Start date is required.");
+
+      return { name, startDate, status: statusVal, description };
+    }
+
+    function enterAddMode() {
+      editingId = null;
+      formTitle.textContent = "Add conflict";
+      saveBtn.textContent = "Add";
+      cancelBtn.style.display = "none";
+      setMsg("", "");
+      fName.value = "";
+      fDate.value = "";
+      fStatus.value = "ACTIVE";
+      fDesc.value = "";
+    }
+
+    function enterEditMode(conflict) {
+      editingId = conflict.id;
+      formTitle.textContent = `Edit conflict #${editingId}`;
+      saveBtn.textContent = "Save";
+      cancelBtn.style.display = "inline-block";
+      setMsg("Editing mode", "");
+      fName.value = conflict.name ?? "";
+      fDate.value = conflict.startDate ?? "";
+      fStatus.value = conflict.status ?? "ACTIVE";
+      fDesc.value = conflict.description ?? "";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function load() {
+      tbody.innerHTML = "";
+      info.textContent = "Loading...";
+
+      const q = status.value ? `?status=${encodeURIComponent(status.value)}` : "";
+      const res = await fetch(`/api/v1/conflicts${q}`);
+      if (!res.ok) {
+        info.textContent = `Error: ${res.status}`;
+        return;
+      }
+
+      const data = await res.json();
+      info.textContent = `${data.length} conflicts`;
+
+      for (const c of data) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${c.id ?? ""}</td>
+          <td>${escapeHtml(c.name ?? "")}</td>
+          <td>${c.startDate ?? ""}</td>
+          <td>${c.status ?? ""}</td>
+          <td>${escapeHtml(c.description ?? "")}</td>
+          <td>
+            <div class="actions">
+              <button type="button" data-edit="${c.id}">Edit</button>
+              <button type="button" data-del="${c.id}">Delete</button>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      tbody.querySelectorAll("button[data-edit]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-edit");
+          const r = await fetch(`/api/v1/conflicts/${id}`);
+          if (!r.ok) { setMsg(`Error loading conflict ${id}`, "error"); return; }
+          const conflict = await r.json();
+          enterEditMode(conflict);
+        });
+      });
+
+      tbody.querySelectorAll("button[data-del]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-del");
+          if (!confirm(`Delete conflict #${id}?`)) return;
+          await deleteConflict(id);
+        });
+      });
+    }
+
+    async function saveConflict() {
+      setMsg("", "");
+
+      let payload;
+      try {
+        payload = getFormPayload();
+      } catch (e) {
+        setMsg(e.message || "Invalid form", "error");
+        return;
+      }
+
+      saveBtn.disabled = true;
+      cancelBtn.disabled = true;
+
+      const url = editingId ? `/api/v1/conflicts/${editingId}` : "/api/v1/conflicts";
+      const method = editingId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+
+      if (!res.ok) {
+        let extra = "";
+        try { extra = await res.text(); } catch {}
+        setMsg(`Error (${res.status}). ${extra}`.trim(), "error");
+        return;
+      }
+
+      setMsg(editingId ? "Conflict updated." : "Conflict created.", "ok");
+      enterAddMode();
+      await load();
+    }
+
+    async function deleteConflict(id) {
+      setMsg("", "");
+      const res = await fetch(`/api/v1/conflicts/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        let extra = "";
+        try { extra = await res.text(); } catch {}
+        setMsg(`Error deleting (${res.status}). ${extra}`.trim(), "error");
+        return;
+      }
+      setMsg(`Conflict #${id} deleted.`, "ok");
+      if (String(editingId) === String(id)) enterAddMode();
+      await load();
+    }
+
+    reloadBtn.addEventListener("click", load);
+    status.addEventListener("change", load);
+    saveBtn.addEventListener("click", saveConflict);
+    cancelBtn.addEventListener("click", enterAddMode);
+
+    enterAddMode();
+    load();
+</script>
+</body>
+</html>
