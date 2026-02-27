@@ -1,56 +1,96 @@
-# Conflict Tracker API (Spring Boot)
+# Conflict Tracker API
 
-API REST desarrollada con **Spring Boot 3 + Java 17 + Spring Data JPA** para gestionar información sobre conflictos bélicos.  
-Actualmente el proyecto implementa **solo la parte de `Conflict`** (CRUD + filtro por estado) y un **frontend testimonial** para probar la API (frontend por cortesía de ChatGPT).
+API REST desarrollada con Spring Boot 3 para gestionar conflictos bélicos, facciones, países y eventos clave.
 
 ## Tecnologías
-- Java 17
+- Java 17+
 - Spring Boot 3
 - Spring Web
 - Spring Data JPA (Hibernate)
-- H2 Database (desarrollo)
+- H2 (desarrollo)
+- PostgreSQL (perfil de despliegue)
+- Thymeleaf (vista web básica)
 - Maven
 
-## Cómo ejecutar
-1. Clona el repositorio y abre el proyecto.
-2. Ejecuta la aplicación:
-   - IntelliJ: Run `ConflictTrackerApplication`
-   - Terminal: `mvn spring-boot:run` (debes tener maven en el path)
-3. La app se levanta en `http://localhost:8080`
+## Ejecutar el proyecto
+1. Compilar:
+```bash
+./mvnw clean compile
+```
 
-## Base de datos (H2)
-- Consola H2: `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:testdb`
-- User: `sa`
-- Password: `password`
+2. Ejecutar en desarrollo (H2):
+```bash
+./mvnw spring-boot:run
+```
 
-El proyecto incluye un `data.sql` con datos iniciales para probar la API.
+3. Ejecutar con PostgreSQL:
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=postgres
+```
 
-## Frontend testimonial
-Se sirve un `index.html` desde `src/main/resources/static`.
+## Base de datos
+### H2 (por defecto)
+- Consola: `http://localhost:8080/h2-console`
+- JDBC URL: `jdbc:h2:mem:conflictdb`
+- Usuario: `sa`
+- Contraseña: `password`
 
-- Abrir: `http://localhost:8080/`
-- El frontend consume `GET /api/v1/conflicts` y muestra los resultados en una tabla.
-- (Opcional si lo has añadido) permite crear/editar/borrar conflictos usando la API.
+### PostgreSQL
+Configura las credenciales en `src/main/resources/application-postgres.properties`.
 
-## Endpoints implementados (Conflict)
+## API REST
 Base path: `/api/v1`
 
-- `GET /conflicts`  
-  Lista todos los conflictos.
+### Conflicts
+- `GET /conflicts`
+- `GET /conflicts/{id}`
+- `POST /conflicts`
+- `PUT /conflicts/{id}`
+- `DELETE /conflicts/{id}`
+- `GET /conflicts?status=ACTIVE`
 
-- `GET /conflicts?status=ACTIVE`  
-  Lista conflictos filtrando por estado (`ACTIVE`, `FROZEN`, `ENDED`).
+### Factions
+- `GET /factions`
+- `GET /factions/{id}`
+- `POST /factions`
+- `PUT /factions/{id}`
+- `DELETE /factions/{id}`
 
-- `GET /conflicts/{id}`  
-  Devuelve un conflicto por id.
+### Events
+- `GET /events`
+- `GET /events/{id}`
+- `POST /events`
+- `PUT /events/{id}`
+- `DELETE /events/{id}`
 
-- `POST /conflicts`  
-  Crea un conflicto. Body (JSON):
-  ```json
-  {
-    "name": "Example",
-    "startDate": "2020-01-01",
+### Consulta avanzada
+- `GET /countries/{code}/conflicts`
+
+## Ejemplos con curl
+Crear conflicto:
+```bash
+curl -X POST http://localhost:8080/api/v1/conflicts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Example Conflict",
+    "startDate": "2024-01-01",
     "status": "ACTIVE",
-    "description": "..."
-  }
+    "description": "Conflicto de prueba",
+    "countryCodes": ["UKR", "RUS"]
+  }'
+```
+
+Filtrar conflictos activos:
+```bash
+curl "http://localhost:8080/api/v1/conflicts?status=ACTIVE"
+```
+
+Conflictos por país:
+```bash
+curl "http://localhost:8080/api/v1/countries/UKR/conflicts"
+```
+
+## Vista web (Thymeleaf)
+- `GET /web/conflicts`
+- Muestra una tabla con nombre, fecha de inicio, estado y descripción corta.
+- Permite filtrar por estado.

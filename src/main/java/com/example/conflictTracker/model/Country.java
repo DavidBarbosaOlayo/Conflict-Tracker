@@ -1,16 +1,22 @@
 package com.example.conflictTracker.model;
 
 import jakarta.persistence.*;
+
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@Table(name = "countries")
 public class Country {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false)
     private String name;
+
+    @Column(nullable = false, unique = true, length = 3)
     private String code;
 
     @ManyToMany(mappedBy = "countries")
@@ -19,8 +25,8 @@ public class Country {
     @ManyToMany(mappedBy = "supportedCountries")
     private Set<Faction> factions = new HashSet<>();
 
-
-    public Country() {}
+    public Country() {
+    }
 
     public Country(String name, String code) {
         this.name = name;
