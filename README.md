@@ -58,9 +58,9 @@ Para la práctica de despliegue el proyecto se ha partido en tres capas:
 - Frontend: Vue 3 en Vercel
 
 URLs:
+- Frontend: https://conflict-tracker-omega.vercel.app
 - Backend: https://conflict-tracker-api-zzui.onrender.com
 - API: https://conflict-tracker-api-zzui.onrender.com/api/v1/conflicts
-- Frontend: (pendiente de subir a Vercel)
 
 Esquema:
 
